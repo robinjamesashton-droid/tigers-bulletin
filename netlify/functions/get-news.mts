@@ -3,7 +3,7 @@ import type { Context, Config } from "@netlify/functions";
 function buildPrompt(): string {
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
-  return "Today's date is " + todayStr + ". Search the web for the latest news about Hull City AFC (the English football club, nicknamed The Tigers, playing in the EFL Championship). Use at most 4 search queries total. Prioritize reputable football/sports sources such as BBC Sport, Sky Sports, Hull Live / Hull Daily Mail, or the club's official site, and include the 1904 Podcast (the Hull City fan podcast) if relevant recent content exists. When a story comes from the 1904 Podcast, set \"source\" to \"1904 Podcast\". IMPORTANT: at least one of your search queries MUST specifically target Hull Live or Hull Daily Mail (hulldailymail.co.uk), and your final results MUST include at least one story from that source if any qualifying recent story exists there - do not skip Hull Live/Hull Daily Mail in favor of only national outlets. ONLY include stories that were published within the last 7 days (i.e. on or after " + new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) + "). Do not include older stories even if they seem important - skip them and search for more recent ones instead. Find up to 5 distinct stories that meet this recency requirement; it is fine to return fewer than 5 if that's all that qualifies, but do not pad with older stories. For the \"url\" field, you MUST use the exact, specific article URL returned in your search results for that story - never the publication's homepage, a section front page (like /football or /news), or a guessed/shortened URL. If you cannot find the specific article URL for a story, exclude that story rather than substituting a homepage link. Respond with ONLY a raw JSON array (no markdown fences, no commentary) where each item has exactly these keys: \"headline\" (string, in your own words), \"source\" (string, publication name), \"date\" (string, human-readable, e.g. '12 Jul 2026'), \"iso_date\" (string, YYYY-MM-DD, best estimate if unstated), \"summary\" (string, 1-2 sentences in your own words, never a direct quote), \"url\" (string, the exact direct article URL from search results). Order the array with the newest story first. Return nothing except that JSON array.";
+  return "Today's date is " + todayStr + ". Search the web for the latest news about Hull City AFC (the English football club, nicknamed The Tigers, newly promoted to the Premier League). Use EXACTLY 3 search queries total, no more, each targeting these approved sources only: (1) a query aimed at Hull Live / Hull Daily Mail (hulldailymail.co.uk), (2) a query aimed at Sky Sports and BBC Sport, (3) a query aimed at the official Hull City website (wearehullcity.co.uk) and the 1904 Podcast (the Hull City fan podcast). Do not run additional searches beyond these 3, and do not use any sources outside this approved list: Hull Live/Hull Daily Mail, Sky Sports, BBC Sport, the official Hull City website, and the 1904 Podcast. When a story comes from the 1904 Podcast, set \"source\" to \"1904 Podcast\". From the combined results, pick up to 5 distinct stories, including at least one from Hull Live/Hull Daily Mail if one exists in the results. ONLY include stories published within the last 7 days (on or after " + new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) + "). It is fine to return fewer than 5 stories if that's all that qualifies. For the \"url\" field, you MUST use the exact, specific article URL returned in your search results for that story - never a homepage, section front page, or a guessed/shortened URL. If you cannot find the specific article URL for a story, exclude that story rather than substituting a homepage link. Respond with ONLY a raw JSON array (no markdown fences, no commentary) where each item has exactly these keys: \"headline\" (string, in your own words), \"source\" (string, publication name), \"date\" (string, human-readable, e.g. '12 Jul 2026'), \"iso_date\" (string, YYYY-MM-DD, best estimate if unstated), \"summary\" (string, 1-2 sentences in your own words, never a direct quote), \"url\" (string, the exact direct article URL from search results). Order the array with the newest story first. Return nothing except that JSON array.";
 }
 
 export default async (req: Request, context: Context) => {
@@ -58,90 +58,4 @@ export default async (req: Request, context: Context) => {
     // so we can correct any URL the model mistyped or guessed at.
     const searchResults: { url: string; title: string }[] = [];
     for (const block of data.content || []) {
-      if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
-        for (const item of block.content) {
-          if (item && item.url) {
-            searchResults.push({ url: item.url, title: item.title || "" });
-          }
-        }
-      }
-    }
-
-    function wordOverlapScore(a: string, b: string): number {
-      const wordsA = new Set(a.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3));
-      const wordsB = new Set(b.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3));
-      let matches = 0;
-      for (const w of wordsA) {
-        if (wordsB.has(w)) matches++;
-      }
-      return matches;
-    }
-
-    function findBestMatchingUrl(headline: string, candidateUrl: string): string | undefined {
-      const exact = searchResults.find((r) => r.url === candidateUrl);
-      if (exact) return exact.url;
-
-      let best: { url: string; score: number } | null = null;
-      for (const r of searchResults) {
-        const score = wordOverlapScore(headline, r.title);
-        if (score > 0 && (!best || score > best.score)) {
-          best = { url: r.url, score };
-        }
-      }
-      return best && best.score >= 2 ? best.url : undefined;
-    }
-
-    let cleaned = textBlocks.trim();
-    cleaned = cleaned.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-
-    const firstBracket = cleaned.indexOf("[");
-    const lastBracket = cleaned.lastIndexOf("]");
-    if (firstBracket !== -1 && lastBracket !== -1) {
-      cleaned = cleaned.slice(firstBracket, lastBracket + 1);
-    }
-
-    const stories = JSON.parse(cleaned);
-
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-    let filteredStories = stories;
-    if (Array.isArray(stories)) {
-      for (const story of stories) {
-        if (story && typeof story === "object") {
-          const corrected = findBestMatchingUrl(story.headline || "", story.url || "");
-          story.url = corrected || undefined;
-        }
-      }
-
-      filteredStories = stories.filter((story: any) => {
-        if (!story || !story.iso_date) return true; // keep if we can't tell, rather than losing it
-        const parsed = Date.parse(story.iso_date);
-        if (isNaN(parsed)) return true;
-        return parsed >= sevenDaysAgo;
-      });
-
-      filteredStories.sort((a: any, b: any) => {
-        const dateA = a && a.iso_date ? Date.parse(a.iso_date) : NaN;
-        const dateB = b && b.iso_date ? Date.parse(b.iso_date) : NaN;
-        if (isNaN(dateA) && isNaN(dateB)) return 0;
-        if (isNaN(dateA)) return 1;
-        if (isNaN(dateB)) return -1;
-        return dateB - dateA;
-      });
-    }
-
-    return new Response(JSON.stringify({ stories: filteredStories }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err?.message || "Unknown server error" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
-};
-
-export const config: Config = {
-  path: "/api/get-news",
-};
+      if (block.type === "web_sea
