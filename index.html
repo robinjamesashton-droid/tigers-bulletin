@@ -298,7 +298,14 @@
       }
 
       renderStories(data.stories);
-      updated.textContent = "Last updated " + new Date().toLocaleString();
+      const updatedText = "Last updated " + new Date().toLocaleString();
+      updated.textContent = updatedText;
+      try {
+        localStorage.setItem('tigersBulletinStories', JSON.stringify(data.stories));
+        localStorage.setItem('tigersBulletinUpdatedText', updatedText);
+      } catch(e) {
+        console.warn('Could not save to localStorage', e);
+      }
     } catch (err) {
       clearTimeout(timeoutId);
       clearTimeout(progressTimer);
@@ -314,6 +321,20 @@
   }
 
   btn.addEventListener('click', fetchNews);
+
+  try {
+    const savedStories = localStorage.getItem('tigersBulletinStories');
+    const savedUpdatedText = localStorage.getItem('tigersBulletinUpdatedText');
+    if(savedStories){
+      const stories = JSON.parse(savedStories);
+      renderStories(stories);
+      if(savedUpdatedText){
+        updated.textContent = savedUpdatedText;
+      }
+    }
+  } catch(e) {
+    console.warn('Could not load from localStorage', e);
+  }
 </script>
 
 </body>
