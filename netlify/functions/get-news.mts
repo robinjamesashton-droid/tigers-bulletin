@@ -106,6 +106,21 @@ export default async (req: Request, context: Context) => {
         "Hull Live",
         sevenDaysAgo
       ),
+      fetchFeed(
+        "https://www.yorkshirepost.co.uk/sport/football/hull-city/rss",
+        "Yorkshire Post",
+        sevenDaysAgo
+      ),
+      fetchFeed(
+        "https://footballleagueworld.co.uk/feed/tag/hull-city/",
+        "Football League World",
+        sevenDaysAgo
+      ),
+      fetchFeed(
+        "https://the72.co.uk/category/hull-city/feed/",
+        "The72",
+        sevenDaysAgo
+      ),
     ]);
 
     let allStories: Story[] = [];
