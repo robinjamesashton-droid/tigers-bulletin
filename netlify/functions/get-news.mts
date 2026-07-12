@@ -50,40 +50,22 @@ export default async (req: Request, context: Context) => {
       );
     }
 
-    let cleaned = textBlocks.trim();
-    cleaned = cleaned.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-
-    const firstBracket = cleaned.indexOf("[");
-    const lastBracket = cleaned.lastIndexOf("]");
-    if (firstBracket !== -1 && lastBracket !== -1) {
-      cleaned = cleaned.slice(firstBracket, lastBracket + 1);
+    // Collect the real URLs/titles that actually came back from web search,
+    // so we can correct any URL the model mistyped or guessed at.
+    const searchResults: { url: string; title: string }[] = [];
+    for (const block of data.content || []) {
+      if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+        for (const item of block.content) {
+          if (item && item.url) {
+            searchResults.push({ url: item.url, title: item.title || "" });
+          }
+        }
+      }
     }
 
-    const stories = JSON.parse(cleaned);
-
-    if (Array.isArray(stories)) {
-      stories.sort((a: any, b: any) => {
-        const dateA = a && a.iso_date ? Date.parse(a.iso_date) : NaN;
-        const dateB = b && b.iso_date ? Date.parse(b.iso_date) : NaN;
-        if (isNaN(dateA) && isNaN(dateB)) return 0;
-        if (isNaN(dateA)) return 1;
-        if (isNaN(dateB)) return -1;
-        return dateB - dateA;
-      });
-    }
-
-    return new Response(JSON.stringify({ stories }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err?.message || "Unknown server error" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
-};
-
-export const config: Config = {
-  path: "/api/get-news",
-};
+    function wordOverlapScore(a: string, b: string): number {
+      const wordsA = new Set(a.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3));
+      const wordsB = new Set(b.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3));
+      let matches = 0;
+      for (const w of wordsA) {
+        if (wordsB.has(w
