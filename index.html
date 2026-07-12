@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tigers Bulletin — Hull City AFC News</title>
+<title>Tigers Bulletin - Hull City AFC News</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
@@ -96,4 +96,225 @@
   }
 
   button#refresh{
-    font-family:'J
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    padding:12px 20px;
+    cursor:pointer;
+    transition:transform .12s ease, background .12s ease;
+  }
+  button#refresh:hover{ background:var(--amber-dim); }
+  button#refresh:active{ transform:scale(0.97); }
+  button#refresh:disabled{ opacity:0.5; cursor:default; transform:none; background:var(--ink); }
+  button#refresh:focus-visible{ outline:3px solid var(--amber); outline-offset:2px; }
+
+  main{
+    max-width:760px;
+    margin:0 auto;
+    padding:28px 24px 80px;
+  }
+
+  .state-msg{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    color:var(--meta);
+    padding:40px 0;
+    text-align:center;
+  }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-left:4px solid var(--amber);
+    padding:22px 24px;
+    margin-bottom:18px;
+  }
+
+  .card-meta{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:12px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--amber-dim);
+    margin-bottom:8px;
+  }
+
+  .card-meta .date{ color:var(--meta); }
+
+  .card h2{
+    font-family:'Archivo Black', sans-serif;
+    font-size:20px;
+    line-height:1.25;
+    margin:0 0 10px;
+    font-weight:400;
+  }
+
+  .card p{
+    font-size:15.5px;
+    line-height:1.55;
+    color:#3a352d;
+    margin:0 0 12px;
+  }
+
+  .card a{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+    color:var(--ink);
+    text-decoration:none;
+    border-bottom:1px solid var(--amber);
+    padding-bottom:1px;
+  }
+  .card a:hover{ color:var(--amber-dim); }
+
+  .error{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    color:#8a2c1c;
+    background:#fbeae3;
+    border:1px solid #e0b8a8;
+    padding:16px 20px;
+    margin-bottom:18px;
+  }
+
+  footer{
+    max-width:760px;
+    margin:0 auto;
+    padding:0 24px 50px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--meta);
+    text-align:center;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    button#refresh{ transition:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stripes"></div>
+
+<header>
+  <p class="eyebrow">Amber &amp; Black - East Yorkshire</p>
+  <h1>Tigers<span>Bulletin</span></h1>
+  <p class="sub">The latest Hull City AFC news, pulled live from reputable football reporting - ready in about 90 seconds. Just tap "Get news now" below.</p>
+</header>
+
+<div class="controls">
+  <span class="updated" id="updated">Not yet fetched</span>
+  <button id="refresh">Get news now</button>
+</div>
+
+<main id="main">
+  <div class="state-msg" id="initial-msg">Press "Get news now" to pull today's Tigers coverage.</div>
+</main>
+
+<footer>Sources are aggregated automatically and linked out for full stories. The 1904 Podcast is fan commentary rather than a news outlet - treat it as opinion and analysis, not reporting. Always verify breaking news against the original source.</footer>
+
+<script>
+  const btn = document.getElementById('refresh');
+  const main = document.getElementById('main');
+  const updated = document.getElementById('updated');
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.innerText = str;
+    return d.innerHTML;
+  }
+
+  function renderLoading(){
+    main.innerHTML = '<div class="state-msg">Searching reputable sources for Hull City AFC news...</div>';
+  }
+
+  function renderError(message){
+    main.innerHTML = '<div class="error">Couldn\'t fetch news: ' + escapeHtml(message) + '. Try again.</div>';
+  }
+
+  function renderStories(stories){
+    if(!Array.isArray(stories) || stories.length === 0){
+      main.innerHTML = '<div class="state-msg">No stories came back. Try refreshing.</div>';
+      return;
+    }
+    main.innerHTML = stories.map(s => {
+      const headline = escapeHtml(s.headline || 'Untitled');
+      const source = escapeHtml(s.source || 'Unknown source');
+      const date = escapeHtml(s.date || '');
+      const summary = escapeHtml(s.summary || '');
+      const url = s.url ? String(s.url) : '';
+      const safeUrl = /^https?:\/\//i.test(url) ? url : '';
+      return '<article class="card">' +
+        '<div class="card-meta"><span class="source">' + source + '</span><span class="date">' + date + '</span></div>' +
+        '<h2>' + headline + '</h2>' +
+        '<p>' + summary + '</p>' +
+        (safeUrl ? '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer">Read full story -></a>' : '') +
+        '</article>';
+    }).join('');
+  }
+
+  async function fetchNews(){
+    btn.disabled = true;
+    renderLoading();
+
+    const progressTimer = setTimeout(() => {
+      const msg = document.querySelector('#main .state-msg');
+      if(msg) msg.textContent = "Still searching - checking multiple outlets can take a little while...";
+    }, 8000);
+    const progressTimer2 = setTimeout(() => {
+      const msg = document.querySelector('#main .state-msg');
+      if(msg) msg.textContent = "Almost there - finishing up the last source...";
+    }, 30000);
+
+    let timedOut = false;
+    const timeoutId = setTimeout(() => { timedOut = true; }, 90000);
+
+    try {
+      const fetchPromise = fetch("/api/get-news");
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("TIMEOUT")), 90000);
+      });
+
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+      clearTimeout(timeoutId);
+      clearTimeout(progressTimer);
+      clearTimeout(progressTimer2);
+
+      const data = await response.json();
+
+      if(!response.ok){
+        throw new Error(data.error || ("Request failed (" + response.status + ")"));
+      }
+
+      renderStories(data.stories);
+      updated.textContent = "Last updated " + new Date().toLocaleString();
+    } catch (err) {
+      clearTimeout(timeoutId);
+      clearTimeout(progressTimer);
+      clearTimeout(progressTimer2);
+      console.error("Tigers Bulletin fetch error:", err);
+      const message = (err && err.message === "TIMEOUT")
+        ? "The search took too long and timed out. Try again."
+        : ((err && err.message) || "unknown error");
+      renderError(message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener('click', fetchNews);
+</script>
+
+</body>
+</html>
